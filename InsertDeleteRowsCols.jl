@@ -2,7 +2,7 @@
 
 module InsertDeleteRowsCols
 
-export insertRow, insertRows, insertCol, insertCols, deleteRow, deleteRows, deleteCol, deleteCols
+export insertRow, insertRows, insertCol, insertCols, deleteRow, deleteRows, deleteCol, deleteCols, insertRowAndCol, insertRowsAndCols, deleteRowAndCol, deleteRowsAndCols
 
 function insertRow(arr, idx)
     M,N = size(arr)

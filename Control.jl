@@ -5,6 +5,8 @@ using LinearAlgebra
 using Zygote
 
 using RotationFuns
+using InsertDeleteRowsCols
+using QuadConstants
 
 export controllerNone, makeLQRt, referenceSignalConstant, linearize, ctrbMat, isControllable, uncontrolledStates
 
@@ -73,10 +75,11 @@ end
 function linearize(nonLinDFun, x0, odeParams, t0)
     # Get the A and B matrices of the linearized system resulting from nonLinDFun
     quadConsts, controller, externalForces, referenceSignal = odeParams
-    mass, J = quadConsts
+    mass = quadConsts.mass
+    J = quadConsts.J
     r0 = referenceSignal(x0, t0)
     u0 = controller(x0, r0, t0)
-    forces = externalForces(x0, t0)
+    forces = externalForces(x0, t0, quadConsts)
 
     dfdx = x -> jacobian(x -> nonLinDFun(x, u0, forces, mass, J, t0), x)[1] # df/dx(x)
     dfdu = u -> jacobian(u -> nonLinDFun(x0, u, forces, mass, J, t0), u)[1] # df/du(u)

@@ -1,5 +1,7 @@
 module RotationFuns
 
+using LinearAlgebra
+
 export skewMat, quat2mat, quat2euler, euler2quat
 
 function skewMat(vec)

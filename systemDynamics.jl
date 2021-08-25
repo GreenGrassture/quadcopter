@@ -2,14 +2,18 @@
 module SystemDynamics
 
 using DifferentialEquations
+using LinearAlgebra
 
 using RotationFuns
+using InsertDeleteRowsCols
+using QuadConstants
 
 export simSys, outerDFun, innerDFun
 
+
 function simSys(x0, params, tSpan)
-    cb = ManifoldProjection(quaternionError)
-    prob = ODEProblem(outerDFun, x0, tSpan, params, callback=cb, save_everystep=false)
+    quatCB = ManifoldProjection(quaternionError)
+    prob = ODEProblem(outerDFun, x0, tSpan, params, callback=quatCB, save_everystep=false)
     sol = solve(prob)
     return sol
 end
@@ -18,10 +22,11 @@ function outerDFun(x, params, t)
     # Function with correct type signature for ODE solver.  All of the parameters except the current 
     # state are packaged inside params
     quadConsts, controller, forceFunc, referenceSignal = params
-    mass, J = quadConsts
+    mass = quadConsts.mass
+    J = quadConsts.J
     r = referenceSignal(x, t)
     u = controller(x, r, t)
-    fExternal_E = forceFunc(x, t)
+    fExternal_E = forceFunc(x, t, quadConsts)
     dx = innerDFun(x, u, fExternal_E, mass, J, t)
     return dx
 end
@@ -76,34 +81,23 @@ function innerDFun(x, u, fExternal_E, mass, J, t)
     #dx[11:13] = omegaDot
 end
 
-function qDot(q, ω)
+@inline function qDot(q, ω)
     return 0.5*[-q[2:4]'; q[1]*I(3)+skewMat(q[2:4])]*ω
 end
 
-function ωDot(ω, n, J)
+@inline function ωDot(ω, n, J)
     return inv(J)*(-skewMat(ω)*J*ω + n)
 end
 
-function vDot(forces_E, mass)
+@inline function vDot(forces_E, mass)
 
     return sum(forces_E)/mass
 end
 
-function sDot(v)
+@inline function sDot(v)
     return v
 end
 
-
-function mixAndUnmix(L, K)
-    # mixer matrix converts motor forces into total thrust and three moments
-    # unmixer does the reverse, taking the thrust and moments and returning motor forces
-    unmixer = [  [ 1  1  1  1]
-               L*[ 1 -1 -1  1]
-               L*[-1 -1  1  1]
-               K*[ 1 -1  1 -1]]
-    mixer = inv(unmixer)
-    return (mixer, unmixer)
-end
 
 function quaternionError(resid, x, params, t)
     # Function that measures the error in the norm of the rotation quaternion.  Used according to:
@@ -112,5 +106,11 @@ function quaternionError(resid, x, params, t)
     resid[1] = 1 - quatNorm
     resid[2:13] = zeros(12)
 end
+
+function motorModel(x, u, t, quadConsts)
+    fMax = quadConsts.maxMotorForce
+
+end
+
 
 end
