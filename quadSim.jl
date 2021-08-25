@@ -5,12 +5,12 @@ using PlotlyJS
 using Zygote
 
 # My modules
-using .Control
-using .PlottingFuns
-using .InsertDeleteRowsCols
-using .SystemDynamics
-using .RotationFuns
-using .Forces
+using Control
+using PlottingFuns
+using InsertDeleteRowsCols
+using SystemDynamics
+using RotationFuns
+using Forces
 
 # Notes:
 # I'm running into a problem with the quaternion representation of the orientation - at hover conditions, the row of the A matrix corresponding to q0 is all zeros.

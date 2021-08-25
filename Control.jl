@@ -4,6 +4,8 @@ using ControlSystems
 using LinearAlgebra
 using Zygote
 
+using RotationFuns
+
 export controllerNone, makeLQRt, referenceSignalConstant, linearize, ctrbMat, isControllable, uncontrolledStates
 
 ##### Controllers ##########################

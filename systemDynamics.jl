@@ -3,6 +3,8 @@ module SystemDynamics
 
 using DifferentialEquations
 
+using RotationFuns
+
 export simSys, outerDFun, innerDFun
 
 function simSys(x0, params, tSpan)
