@@ -1,8 +1,4 @@
-module Forces
 
-using QuadConstants
-
-export externalForcesNone, externalForcesOnlyG
 
 ##### External Forces ######################
 function externalForcesNone(x, t, quadConsts)
@@ -19,5 +15,3 @@ function externalForcesOnlyG(x, t, quadConsts)
     return gravForce_E
 end
 ############################################
-
-end

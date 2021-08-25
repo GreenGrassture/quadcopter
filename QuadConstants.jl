@@ -1,8 +1,4 @@
-module QuadConstants
 
-export g, CFConsts
-
-# Defining constants
 const g = 9.81 # m/s^2
 
 JxxCF = 16e-6 # kg*m^2
@@ -71,4 +67,3 @@ CFConsts = QuadParams(massCF,
                       unmixCF)
 
 
-end

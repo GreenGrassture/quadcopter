@@ -1,14 +1,5 @@
 # Functions for computing the behavior of the system
-module SystemDynamics
 
-using DifferentialEquations
-using LinearAlgebra
-
-using RotationFuns
-using InsertDeleteRowsCols
-using QuadConstants
-
-export simSys, outerDFun, innerDFun
 
 
 function simSys(x0, params, tSpan)
@@ -109,8 +100,5 @@ end
 
 function motorModel(x, u, t, quadConsts)
     fMax = quadConsts.maxMotorForce
-
-end
-
 
 end
