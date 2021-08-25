@@ -1,9 +1,4 @@
 # Functions for plotting various things
-module PlottingFuns
-
-using PlotlyJS
-
-export plotAandB, imshow, plotEigvals, plotStates
 
 function plotAandB(A, B)
     # Plots the A and B matrices in a reasonable form
@@ -82,4 +77,3 @@ function plotStates(sol)
     p1
 end
 
-end

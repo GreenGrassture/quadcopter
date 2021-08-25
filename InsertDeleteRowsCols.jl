@@ -1,9 +1,5 @@
 #### Functions for inserting and deleting rows and columns in arrays ####
 
-module InsertDeleteRowsCols
-
-export insertRow, insertRows, insertCol, insertCols, deleteRow, deleteRows, deleteCol, deleteCols, insertRowAndCol, insertRowsAndCols, deleteRowAndCol, deleteRowsAndCols
-
 function insertRow(arr, idx)
     M,N = size(arr)
     newArr = [arr[1:idx-1,:]
@@ -94,4 +90,3 @@ function insertRowsAndCols(arr, idxVec)
     return newArr
 end
 
-end

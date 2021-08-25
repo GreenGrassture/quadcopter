@@ -1,8 +1,3 @@
-module RotationFuns
-
-using LinearAlgebra
-
-export skewMat, quat2mat, quat2euler, euler2quat
 
 function skewMat(vec)
     # Promotes a vector in R^3 to a skew-symmetric matrix
@@ -46,6 +41,3 @@ function euler2quat(eulerAngles)
     Φ, θ, ψ = eulerAngles
     return euler2quat(Φ, θ, ψ)
 end
-
-end
-

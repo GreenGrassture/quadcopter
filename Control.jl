@@ -1,14 +1,3 @@
-module Control
-
-using ControlSystems
-using LinearAlgebra
-using Zygote
-
-using RotationFuns
-using InsertDeleteRowsCols
-using QuadConstants
-
-export controllerNone, makeLQRt, referenceSignalConstant, linearize, ctrbMat, isControllable, uncontrolledStates
 
 ##### Controllers ##########################
 function controllerNone()
@@ -149,6 +138,4 @@ function uncontrolledStates(A, B)
         end
         return states
     end
-end
-
 end
