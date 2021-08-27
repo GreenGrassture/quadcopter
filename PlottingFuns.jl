@@ -52,7 +52,7 @@ function plotStates(sol)
     p_ωy = scatter(x=sol.t, y=sol[12,:], mode="lines")
     p_ωz = scatter(x=sol.t, y=sol[13,:], mode="lines")
 
-    p1 = make_subplots(rows=5, cols=3, subplot_titles=titles, shared_xaxes=true, shared_yaxes=true)
+    p1 = make_subplots(rows=4, cols=3, subplot_titles=titles, shared_xaxes=true, shared_yaxes=true)
     # plot positions
     add_trace!(p1, p_x, row=1, col=1)
     add_trace!(p1, p_y, row=1, col=2)
@@ -70,8 +70,8 @@ function plotStates(sol)
     add_trace!(p1, p_ωx, row=4, col=2)
     add_trace!(p1, p_ωz, row=4, col=3)
 
-    qnorm = sol[7,:].^2 + sol[8,:].^2 + sol[9,:].^2 + sol[10,:].^2
-    add_trace!(p1, scatter(x=sol.t, y=qnorm), row=5, col=1)
+    #qnorm = sol[7,:].^2 + sol[8,:].^2 + sol[9,:].^2 + sol[10,:].^2
+    #add_trace!(p1, scatter(x=sol.t, y=qnorm), row=5, col=1)
 
     relayout!(p1, showlegend=false)
     p1

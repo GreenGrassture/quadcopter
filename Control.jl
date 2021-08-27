@@ -1,55 +1,95 @@
+using ControlSystems
 
 ##### Controllers ##########################
 function controllerNone()
     # x: state vector
+    # p: ODE parameter dict
     # t: time
-    # r: reference signal
-    
-    # Just commands motors to do nothing (beyond nominal hover thrust).  Intended to be used as a dummy to get the model of the linear, open-loop system from the closed loop version using AD.
-    function nullController(x, r, t)
-        return [0,0,0,0]
+    # Just commands motors to do nothing (beyond nominal hover thrust).  Intended to be used as a dummy to get the model of the linear,
+    # open-loop system from the nonlinear closed-loop version using AD.
+    function nullController(x, p, t)
+        mass = p["quadConsts"].mass
+        hoverThrust = [mass*g 0 0 0]
+        return vec([0 0 0 0] + hoverThrust)
     end
     return nullController
 end
 
-function makeLQRt(nonLinDFun, xLin, linParams, tLin, Q, R)
-    # Takes a nonlinear function and linearizes it around xLin, then designs an optimal controller
+function makeLQR(f, xLin, p, tLin, Q, R, tSample=0.01)
+    # It takes a nonlinear derivative function and linearizes it around xLin, then designs an optimal controller
     # based on Q and R
-    A, B = linearize(nonLinDFun, xLin, linParams, tLin)
-    return makeLQRt(A, B, Q, R)
+    A, B = linearize(f, xLin, uLin, p, tLin)
+        # Our original A and B matrices are for the continuous-time system, so we have to
+        # convert to the discrete time equivalent and use that for the next step.
+        sys = c2d(ss(A, B, I(size(A)[1]), 0), tSample)
+        return makeLQRk(sys.A, sys.B, Q, R, p, tSample)
 end
 
-function makeLQRt(A, B, Q, R)
-    # Takes a description of a linear system and quadratic cost function and returns a function that implements
-    # the optimal controller for that problem
+function makeLQRk(A, B, Q, R, p, tSample)
+    # Implements an optimal discrete time LQR controller.  If the full state is not sufficiently controllable to solve the DARE, it attempts to create a controller for the most 
+    # controllable subset of states.
+    # The discrete version caches the calls at k*Ts to make sure they stay the same over each sampling interval, and don't change retroactively if the integrator goes back
+    # I should also be able to use this to plot the control inputs later
+    K = tryLQR(A, B, Q, R, dlqr)
+    function controller(x, p, t)
+        mass = p["quadConsts"].mass
+        r = p["reference"](x, p, t)
+        hoverThrust = vec([mass*g 0 0 0])
+        return -K*(x-r) + hoverThrust
+    end
 
-    # Check if the linearized form is controllable.  If not, we drop the uncontrollable states and find
-    # a controller for the reduced state.  This is probably a bad idea if the states aren't stable (or bounded??)
-    # but it should work fine for the intended purpose (quaternions, which are over-determined).
-    if isControllable(A,B)
-        K = lqr(A, B, Q, R)
-    else
-        # Find out which states are uncontrollable and delete the corresponding rows and columns from A and Q, and the corresponding rows from B
-        deleteStates = uncontrolledStates(A, B) # If this branch is running, we expect deleteStates to not be empty
-        # Create A, B, and Q matrices for our reduced state system
-        AReduced = deleteRowsAndCols(A, deleteStates)
-        BReduced = deleteRows(B, deleteStates)
-        QReduced = deleteRowsAndCols(Q, deleteStates)
-        # Find the optimal controller for that reduced system
-        KReduced = lqr(AReduced, BReduced, QReduced, R)
-        # Expand the K matrix out to the full state of the system, with zeros in the columns of the uncontrolled states
-        K = insertCols(KReduced, deleteStates)
+    return controller
+end   
+
+function tryLQR(A, B, Q, R, LQRfun)
+    # Repeatedly try to apply LQRfun, removing the least controllable state until success or it runs out of states. Fortunately the test for 
+    # controllability is the same for continuous and discrete case
+    # LQRfun can be either lqr or dlqr depending on whether the problem is continous or discrete
+    # If states were removed, then the K matrix that is returned will have 
+    numStates = size(A)[1]
+    ARed = A
+    BRed = B
+    QRed = Q
+    RRed = R
+    K = nothing
+    removedStates = []
+    while numStates > 0
+        try
+            print(string("Solving ARE with " , numStates, " states...\n"))
+            K = LQRfun(ARed, BRed, QRed, RRed)
+            print("Success\n")
+            break
+        catch e
+            if isa(e, SingularException)
+                print("Singular\n")
+                removedState, ARed, BRed, QRed, RRed = removeLeastControllableState(ARed, BRed, QRed, RRed)
+                print(string("Removed state #", removedState, "\n"))
+                numStates = numStates - 1
+                push!(removedStates, removedState)
+            else
+                throw(e)
+            end
+        end
     end
-    function controller(x, r, t)
-        # the x that is passed from the integrator is a row vector so we take the transpose
-        return -K*(x-r) 
-    end
-    return (controller, K)
+    insertRowsAndCols(K, removedStates)
+    return K
 end
+
+function removeLeastControllableState(A, B, Q, R)
+    # Determines the degree of controllability of each state, and removes the least controllable one
+    U, Σ, Vt = svd(ctrb(A, B))
+    worstVec = U[:,end]
+    worstState = argmax(abs.(worstVec))
+    ARed = deleteRowAndCol(A, worstState)
+    BRed = deleteRow(B, worstState)
+    QRed = deleteRowAndCol(Q, worstState)
+    return (worstState, ARed, BRed, QRed, R)
+end
+
 ############################################
 
 ##### Reference Signals ####################
-function referenceSignalConstant(x, t)
+function referenceSignalConstant(x, p, t)
     # Returns the reference signal as a function of time, and possibly the system state.
     # This version just returns the equilibrium position
     sRef = vec([0, 0, 0])
@@ -59,20 +99,35 @@ function referenceSignalConstant(x, t)
     xRef = [sRef; vRef; qRef; omegaRef]
     return xRef
 end
+
+function makeRamp(s0, sF, t0, tF)
+
+function referenceSignalRamp(x, p, t)
+    # Returns the reference signal as a function of time, and possibly the system state.
+    # This one ramps the desired position from 0 to sF in time T and holds it there
+    T = 5.0
+    s0 = vec([0, 0, 0])
+    sF = vec([1, 0, 0])
+    if t < 0
+        sRef = s0
+    elseif t < T
+        sRef = (T - t)/T*s0 + t/T*sF
+    else
+        sRef = sF
+    end
+    vRef = vec([0, 0, 0])
+    qRef = euler2quat(0, 0, 0)
+    omegaRef = vec([0, 0, 0])
+    xRef = [sRef; vRef; qRef; omegaRef]
+end
+
+
 ############################################
 
-function linearize(nonLinDFun, x0, odeParams, t0)
+function linearize(nonLinDFun, x0, u0, p, t0)
     # Get the A and B matrices of the linearized system resulting from nonLinDFun
-    quadConsts, controller, externalForces, referenceSignal = odeParams
-    mass = quadConsts.mass
-    J = quadConsts.J
-    r0 = referenceSignal(x0, t0)
-    u0 = controller(x0, r0, t0)
-    forces = externalForces(x0, t0, quadConsts)
-
-    dfdx = x -> jacobian(x -> nonLinDFun(x, u0, forces, mass, J, t0), x)[1] # df/dx(x)
-    dfdu = u -> jacobian(u -> nonLinDFun(x0, u, forces, mass, J, t0), u)[1] # df/du(u)
-
+    dfdx = x -> jacobian(x -> nonLinDFun(x, u0, p, t0), x)[1] # df/dx(x, u0)
+    dfdu = u -> jacobian(u -> nonLinDFun(x0, u, p, t0), u)[1] # df/du(x0, u)
     A = dfdx(x0)
     B = dfdu(u0)
     return (A, B)
@@ -138,4 +193,16 @@ function uncontrolledStates(A, B)
         end
         return states
     end
+end
+
+function microcontroller!(integrator)
+    # Encapsulates all the code that might be run on the microcontroller.  Responsible for updating values of controller signal.
+    # Will eventually be responsible for running state estimation and motion planning as well.
+    p = integrator.p
+    x = integrator.u # The state variable is referred to as u by the integrator
+    t = integrator.t
+    controller = p["controller"]
+    u = controller(x, p, t)
+    integrator.p["u"] = u
+    return nothing
 end

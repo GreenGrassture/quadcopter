@@ -85,7 +85,7 @@ function insertRowsAndCols(arr, idxVec)
     idxVec = sort(idxVec, rev=false)
     newArr = arr
     for idx in idxVec
-        newArr = addRowAndCol(newArr, idx)
+        newArr = insertRowAndCol(newArr, idx)
     end
     return newArr
 end

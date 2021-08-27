@@ -1,20 +1,7 @@
-using ControlSystems
-using DifferentialEquations
-using LinearAlgebra
-using PlotlyJS
-using Zygote
-
-# My modules
-#push!(LOAD_PATH, pwd())
-
-include("Control.jl")
-include("PlottingFuns.jl")
-include("InsertDeleteRowsCols.jl")
-include("SystemDynamics.jl")
-include("RotationFuns.jl")
-include("Forces.jl")
-include("QuadConstants.jl")
-
+# Check if the initialization script has run.  If not, run it
+if ! @isdefined initializedQuad
+    include("initScript.jl")
+end
 # Notes:
 # I'm running into a problem with the quaternion representation of the orientation - at hover conditions, the row of the A matrix corresponding to q0 is all zeros.
 # This means that the state is not controllable, and it leads to a singularity exception when trying to solve the CARE for the purpose of LQR control.  Somehow I need to
@@ -29,19 +16,12 @@ include("QuadConstants.jl")
 # 1) Define nonlinear system along with a dummy controller to get open loop system
 # 2) Use automatic differentiation to get linearized system (without control inputs)
 # 3) Write LQR controller for linearized system
-# 4) Plug LQR controller into nonlinear system
+# 4) Plug LQR controller into nonlineasr system
 
 # Also, I need to implement a kalman filter and and a random noise generator that plays nicely with the ODE solver
 
-##### Convenience Functions ################
-function unit(d, idx)
-    # Creates a unit vector in R^d with entry in position idx
-    unitVec = zeros(d)
-    unitVec[idx] = 1
-    return unitVec
-end
-
-#############################################
+# First define an array to hold all of the callbacks that might be created while initializing
+# other things
 
 # Define the nominal operating point and get the linearized model at that point
 sLin = vec([0. 0. 0.])
@@ -50,19 +30,24 @@ qLin = euler2quat(0,0,0)
 ωLin = vec([0. 0. 0.])
 xLin = vec([sLin; vLin; qLin; ωLin])
 tLin = 0.
-linParams = (CFConsts, controllerNone(), externalForcesOnlyG, referenceSignalConstant) 
-A, B = linearize(innerDFun, xLin, linParams, tLin)
-C = I(13)
-D = 0
-Q = I(13)
-R = I(4)
-controllerLQR, K = makeLQRt(A, B, Q, R)
-#sys = ss(A,B,C,D)
+linParams = Dict("quadConsts"=>CFConsts,
+                 "controller"=>controllerNone(),
+                 "forces"=>externalForcesOnlyG,
+                 "reference"=>referenceSignalConstant)
+# We have to compute the initial control signal manually since the integrator hasn't run yet
+uLin = linParams["controller"](xLin, linParams, tLin)
+# Define the cost function J = Σ x'Qx + u'Ru
+Q = 1.0*Matrix(I(13)) # I() will return a sparse matrix by default which breaks the ARE solver somehow
+R = 1.0*Matrix(I(4))
+tSample = 0.05
 # Create a controller for that operating point
+controllerLQR = makeLQR(innerDFun, xLin, linParams, tLin, Q, R, tSample)
 
+
+microCallback = PeriodicCallback(microcontroller!, tSample, initial_affect=true)
 
 # Define initial conditions for the ODE
-s0 = vec([20. 0. 0.])
+s0 = vec([0. 0. 0.])
 v0 = vec([0. 0. 0.])
 q0 = euler2quat(0., 0, 0)
 ω0 = vec([0. 0. 0.])
@@ -71,7 +56,10 @@ t0 = 0.
 tf = 10.
 tSpan = (t0, tf)
 # Set the problem parameters
-ODEParams = (CFConsts, controllerLQR, externalForcesOnlyG, referenceSignalConstant) 
-sol = simSys(x0, ODEParams, tSpan)
+ODEParams = Dict("quadConsts"=>CFConsts,
+                 "controller"=>controllerLQR,
+                 "forces"=>externalForcesOnlyG,
+                 "reference"=>referenceSignalRamp) 
+sol = simSys(x0, ODEParams, tSpan, microCallback)
 p = plotStates(sol)
 #plotAandB(A, B)

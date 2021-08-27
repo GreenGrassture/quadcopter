@@ -1,41 +1,36 @@
 # Functions for computing the behavior of the system
 
-
-
-function simSys(x0, params, tSpan)
-    quatCB = ManifoldProjection(quaternionError)
-    prob = ODEProblem(outerDFun, x0, tSpan, params, callback=quatCB, save_everystep=false)
+function simSys(x0, p, tSpan, microCallback)
+    # Handle callbacks
+    quatCallback = ManifoldProjection(quaternionError)
+    cb = CallbackSet(quatCallback, microCallback)
+    prob = ODEProblem(outerDFun, x0, tSpan, p, callback=cb, save_everystep=false)
     sol = solve(prob)
     return sol
 end
 
-function outerDFun(x, params, t)
+function outerDFun(x, p, t)
     # Function with correct type signature for ODE solver.  All of the parameters except the current 
-    # state are packaged inside params
-    quadConsts, controller, forceFunc, referenceSignal = params
-    mass = quadConsts.mass
-    J = quadConsts.J
-    r = referenceSignal(x, t)
-    u = controller(x, r, t)
-    fExternal_E = forceFunc(x, t, quadConsts)
-    dx = innerDFun(x, u, fExternal_E, mass, J, t)
+    # state and the control input are packaged inside p.
+    u = p["u"]
+    dx = innerDFun(x, u, p, t)
     return dx
 end
 
-function innerDFun(x, u, fExternal_E, mass, J, t)
-    # Has x and u as arguments to allow for taking derivatives wrt to each of them.  This will be wrapped in an outer function to make it compatable with the ODE solver
+function innerDFun(x, u, p, t)
+    # Has x and u as arguments to allow for taking derivatives wrt to each of them.  Wrapped in an outer function to make it compatable with the ODE solver
     # x: the current state vector
     # u: control input
-    # fExternal_E: all of the external forces on the quadcopter, including gravity and possibly things like wind or contact forces
-    # quadConsts: all of the ////physical constants that describe the quadcopter, i.e. mass, moments of intertia, lengths of rotor arms
 
     # State: [x1, x2, x3, v1, v2, v3, q0, q1, q2, q3, p, q, r]
     #        [1]         [4]          [7]            [11]   [13] 
-
+    quadConsts = p["quadConsts"]
+    mass = quadConsts.mass
+    J = quadConsts.J
     # Taking the opportunity to fix the mistake I made in the python version here: having tt after n's
-    T0 = mass*g # Thrust required in hover to counteract gravity
-    ΔT = u[1]   # Additional thrust commanded beyond T0
-    n = u[2:4] # Moments about x, y, z axes (defined in the body frame)
+    uLim = motorModel(u, p) # Limits the motor commands to the physically possible values
+    tt = uLim[1]   # Total thrust
+    n = uLim[2:4] # Moments about x, y, z axes (defined in the body frame)
 
     s = x[1:3] # position
     v = x[4:6] # velocity
@@ -45,22 +40,14 @@ function innerDFun(x, u, fExternal_E, mass, J, t)
     T_BE = quat2mat(q) # rotation matrix form of rotation q
     T_EB = T_BE' # T_EB is orthogonal so its inverse is equal to its transpose
 
-    ds = sDot(v)
-    #sDot = v # ds/dt = v
-
     # Compute accelerations, transforming them all into the earth frame E before combining
-    motorForce_B = [0, 0, T0+ΔT] # Body frame.  Thrust will always be along the vertical axis of the quadcopter in the body frame.
+    motorForce_B = [0, 0, tt] # Body frame.  Thrust will always be along the vertical axis of the quadcopter in the body frame.
     motorForce_E = T_EB*motorForce_B # Converted to earth frame
-    dv = vDot((motorForce_E, fExternal_E), mass)
-    #vDot = (motorForce_E + fExternal_E)/mass
-
+    externalForces_E = p["forces"](x, p, t)
+    ds = sDot(v)
+    dv = vDot((motorForce_E, externalForces_E), mass)
     dq = qDot(q, ω)
-    #qDot = 0.5*[-q[2:4]'
-    #            q[1]*I(3)+skewMat(q[2:4])]*ω
-
     dω = ωDot(ω, n, J)
-    #ωDot = inv(J)*(-skewMat(ω)*J*ω + n)
-
     dx = [ds; dv; dq; dω]
     return dx
 
@@ -81,14 +68,12 @@ end
 end
 
 @inline function vDot(forces_E, mass)
-
     return sum(forces_E)/mass
 end
 
 @inline function sDot(v)
     return v
 end
-
 
 function quaternionError(resid, x, params, t)
     # Function that measures the error in the norm of the rotation quaternion.  Used according to:
@@ -98,7 +83,14 @@ function quaternionError(resid, x, params, t)
     resid[2:13] = zeros(12)
 end
 
-function motorModel(x, u, t, quadConsts)
-    fMax = quadConsts.maxMotorForce
-
+function motorModel(u, p)
+    fMax = p["quadConsts"].maxMotorForce
+    motorForces = p["quadConsts"].unmix*u
+    for i in 1:size(motorForces)[1]
+        force = motorForces[i]
+        if abs(force) > fMax
+            motorForces[i] = sign(force)*fMax
+        end
+    end
+    return p["quadConsts"].mix*motorForces
 end
