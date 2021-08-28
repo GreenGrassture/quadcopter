@@ -37,7 +37,11 @@ linParams = Dict("quadConsts"=>CFConsts,
 # We have to compute the initial control signal manually since the integrator hasn't run yet
 uLin = linParams["controller"](xLin, linParams, tLin)
 # Define the cost function J = Σ x'Qx + u'Ru
-Q = 1.0*Matrix(I(13)) # I() will return a sparse matrix by default which breaks the ARE solver somehow
+sQ = 100*[1., 1., 1.]
+vQ = 1.0*[1., 1., 1.]
+qQ = 1.0*[1., 1., 1., 1.]
+ωQ = 1.0*[1., 1., 1.]
+Q = Matrix(Diagonal([sQ; vQ; qQ; ωQ]))
 R = 1.0*Matrix(I(4))
 tSample = 0.05
 # Create a controller for that operating point
@@ -49,7 +53,7 @@ microCallback = PeriodicCallback(microcontroller!, tSample, initial_affect=true)
 # Define initial conditions for the ODE
 s0 = vec([0. 0. 0.])
 v0 = vec([0. 0. 0.])
-q0 = euler2quat(0., 0, 0)
+q0 = euler2quat(0., 0, 0.)
 ω0 = vec([0. 0. 0.])
 x0 = vec([s0; v0; q0; ω0])
 t0 = 0.
@@ -59,7 +63,6 @@ tSpan = (t0, tf)
 ODEParams = Dict("quadConsts"=>CFConsts,
                  "controller"=>controllerLQR,
                  "forces"=>externalForcesOnlyG,
-                 "reference"=>referenceSignalRamp) 
+                 "reference"=>rampRef) 
 sol = simSys(x0, ODEParams, tSpan, microCallback)
 p = plotStates(sol)
-#plotAandB(A, B)

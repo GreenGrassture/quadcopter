@@ -4,17 +4,16 @@ function simSys(x0, p, tSpan, microCallback)
     # Handle callbacks
     quatCallback = ManifoldProjection(quaternionError)
     cb = CallbackSet(quatCallback, microCallback)
-    prob = ODEProblem(outerDFun, x0, tSpan, p, callback=cb, save_everystep=false)
+    prob = ODEProblem(dFun, x0, tSpan, p, callback=cb, save_everystep=false)
     sol = solve(prob)
+    print("Simulation complete!\n")
     return sol
 end
 
-function outerDFun(x, p, t)
+function dFun(x, p, t)
     # Function with correct type signature for ODE solver.  All of the parameters except the current 
     # state and the control input are packaged inside p.
-    u = p["u"]
-    dx = innerDFun(x, u, p, t)
-    return dx
+    return innerDFun(x, p["u"], p, t)
 end
 
 function innerDFun(x, u, p, t)
@@ -44,19 +43,24 @@ function innerDFun(x, u, p, t)
     motorForce_B = [0, 0, tt] # Body frame.  Thrust will always be along the vertical axis of the quadcopter in the body frame.
     motorForce_E = T_EB*motorForce_B # Converted to earth frame
     externalForces_E = p["forces"](x, p, t)
+  
     ds = sDot(v)
-    dv = vDot((motorForce_E, externalForces_E), mass)
-    dq = qDot(q, ω)
-    dω = ωDot(ω, n, J)
-    dx = [ds; dv; dq; dω]
-    return dx
+    #dx[1:3] = sDot(v)
+    #setindex!(dx, sDot(v), [1,2,3])
 
-    # In-place derivative assignment:
-    #dx = zeros(Float64, 13)
-    #dx[1:3] = sDot
-    #dx[4:6] = vDot
-    #dx[7:10] = qDot
-    #dx[11:13] = omegaDot
+    dv = vDot((motorForce_E, externalForces_E), mass)
+    #dx[4:6] = vDot((motorForce_E, externalForces_E), mass)
+    #setindex!(dx, vDot((motorForce_E, externalForces_E), mass), [4,5,6])
+
+    dq = qDot(q, ω)
+    #dx[7:10] = qDot(q, ω)
+    #setindex!(dx, qDot(q, ω), [7,8,9,10])
+
+    dω = ωDot(ω, n, J)
+    #dx[11:13] = ωDot(ω, n, J)
+    #setindex!(dx, ωDot(ω, n, J), [11,12,13])
+    return [ds; dv; dq; dω]
+    return nothing
 end
 
 @inline function qDot(q, ω)
@@ -93,4 +97,31 @@ function motorModel(u, p)
         end
     end
     return p["quadConsts"].mix*motorForces
+end
+
+function speed2force(ω)
+    # From values found in 136 lab
+    return 4.254E-05*ω - 2.149E-02
+end
+
+
+function speed2PWM(ωDesired)
+    # Convert a desired motor speed in radians/second into the necessary pwm command to achieve that speed 
+    # (according to our linear model)
+    a = -39.12526  # the zeroth order term
+    b = 0.096503   # the first order term
+    return Int64(round(a + b*ωDesired));
+end
+
+function force2speed(desiredForce_Newtons)
+    # Convert a desired force (in a single propeller) into the motor speed in radians/second that will produce that force
+    propConstant = 1.0e-08
+
+    # We implement a safety check,
+    # (no sqrtf for negative numbers)
+    if (desiredForce_N <= 0) 
+        return 0.0
+    else
+        return sqrtf(desiredForce_Newtons / propConstant)
+    end
 end

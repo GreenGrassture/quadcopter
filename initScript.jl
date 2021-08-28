@@ -26,7 +26,7 @@ function unit(d, idx)
 end
 #############################################
 
-function initFun()
+#function initFun()
     # Run this to cause julia to compile/run all the important functions with the
     # proper arguments
     sInit = vec([0. 0. 0.])
@@ -44,10 +44,10 @@ function initFun()
     uInit = initParams["controller"](xInit, initParams, tInit0)
     AInit, BInit = linearize(innerDFun, xInit, uInit, initParams, tInit0) 
     microCallback = PeriodicCallback(microcontroller!, tSample, initial_affect=true)
+    dx0 = 1.0*zeros(13)
     sol = simSys(xInit, initParams, (tInit0, tInit1), microCallback);
-end
-
-initFun()
+#end
+#initFun()
 
 initializedQuad = true
 print("Initialized Workspace")

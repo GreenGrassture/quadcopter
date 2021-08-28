@@ -18,28 +18,21 @@ end
 function makeLQR(f, xLin, p, tLin, Q, R, tSample=0.01)
     # It takes a nonlinear derivative function and linearizes it around xLin, then designs an optimal controller
     # based on Q and R
+    uLin = p["controller"](xLin, p, tLin)
     A, B = linearize(f, xLin, uLin, p, tLin)
-        # Our original A and B matrices are for the continuous-time system, so we have to
-        # convert to the discrete time equivalent and use that for the next step.
-        sys = c2d(ss(A, B, I(size(A)[1]), 0), tSample)
-        return makeLQRk(sys.A, sys.B, Q, R, p, tSample)
-end
-
-function makeLQRk(A, B, Q, R, p, tSample)
-    # Implements an optimal discrete time LQR controller.  If the full state is not sufficiently controllable to solve the DARE, it attempts to create a controller for the most 
-    # controllable subset of states.
-    # The discrete version caches the calls at k*Ts to make sure they stay the same over each sampling interval, and don't change retroactively if the integrator goes back
-    # I should also be able to use this to plot the control inputs later
-    K = tryLQR(A, B, Q, R, dlqr)
+    # Our original A and B matrices are for the continuous-time system, so we have to
+    # convert to the discrete time equivalent and use that for the next step.
+    sys = c2d(ss(A, B, I(size(A)[1]), 0), tSample)
+    #return makeLQRk(sys.A, sys.B, Q, R, p, tSample)
+    K = tryLQR(sys.A, sys.B, Q, R, dlqr)
     function controller(x, p, t)
         mass = p["quadConsts"].mass
         r = p["reference"](x, p, t)
         hoverThrust = vec([mass*g 0 0 0])
         return -K*(x-r) + hoverThrust
     end
-
     return controller
-end   
+end  
 
 function tryLQR(A, B, Q, R, LQRfun)
     # Repeatedly try to apply LQRfun, removing the least controllable state until success or it runs out of states. Fortunately the test for 
@@ -100,26 +93,27 @@ function referenceSignalConstant(x, p, t)
     return xRef
 end
 
-function makeRamp(s0, sF, t0, tF)
-
-function referenceSignalRamp(x, p, t)
-    # Returns the reference signal as a function of time, and possibly the system state.
-    # This one ramps the desired position from 0 to sF in time T and holds it there
-    T = 5.0
-    s0 = vec([0, 0, 0])
-    sF = vec([1, 0, 0])
-    if t < 0
-        sRef = s0
-    elseif t < T
-        sRef = (T - t)/T*s0 + t/T*sF
-    else
-        sRef = sF
+function makeRamp(s0, sf, t0, tf)
+    function referenceSignalRamp(x, p, t)
+        # Returns the reference signal as a function of time, and possibly the system state.
+        # This one ramps the desired position from 0 to sF in time T and holds it there
+        if t < t0
+            sRef = s0
+        elseif t < tf
+            # linearly interpolate between initial and final positions
+            sRef = (tf - t)/(tf - t0)*s0 + (t - t0)/(tf - t0)*sf
+        else
+            sRef = sf
+        end
+        vRef = vec([0, 0, 0])
+        qRef = euler2quat(0, 0, 0)
+        omegaRef = vec([0, 0, 0])
+        xRef = [sRef; vRef; qRef; omegaRef]
     end
-    vRef = vec([0, 0, 0])
-    qRef = euler2quat(0, 0, 0)
-    omegaRef = vec([0, 0, 0])
-    xRef = [sRef; vRef; qRef; omegaRef]
+    return referenceSignalRamp
 end
+
+rampRef = makeRamp([0, 0, 0], [1, 0, 0], 0, 1)
 
 
 ############################################

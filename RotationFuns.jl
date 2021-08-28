@@ -23,18 +23,19 @@ function quat2euler(q)
     Φ = atan(2*(q0*q1 + q2*q3), q0^2 - q1^2 - q2^2 + q3^2)
     θ = asin(2*(q0*q2 - q3*q1))
     ψ = atan(2*(q0*q3 + q1*q2), q0^2 + q1^2 - q2^2 - q3^2)
-    return vec([Φ θ ψ])
+    return rad2deg.([Φ, θ, ψ])
 end
 
 function euler2quat(Φ, θ, ψ)
     # ψ: yaw
     # θ: pitch
     # Φ: roll
+    Φ, θ, ψ = deg2rad.([Φ, θ, ψ])
     q0 = cos(Φ/2)*cos(θ/2)*cos(ψ/2) + sin(Φ/2)*sin(θ/2)*sin(ψ/2)
     q1 = sin(Φ/2)*cos(θ/2)*cos(ψ/2) - cos(Φ/2)*sin(θ/2)*sin(ψ/2)
     q2 = cos(Φ/2)*sin(θ/2)*cos(ψ/2) + sin(Φ/2)*cos(θ/2)*sin(ψ/2)
     q3 = cos(Φ/2)*cos(θ/2)*sin(ψ/2) - sin(Φ/2)*sin(θ/2)*cos(ψ/2)
-    return vec([q0 q1 q2 q3])
+    return [q0, q1, q2, q3]
 end
 
 function euler2quat(eulerAngles)

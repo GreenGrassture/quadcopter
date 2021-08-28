@@ -35,13 +35,13 @@ maxMotorForceCF = 0.58 # N
 # const maxMotorForce = maxMotorForceTrue #kg*mm/s^2
 
 struct QuadParams
-    mass
-    J # moment of inertia matrix
-    L
-    kappa
-    maxMotorForce
-    mix
-    unmix
+    mass::Float64
+    J::Matrix{Float64} # moment of inertia matrix
+    L::Float64
+    kappa::Float64
+    maxMotorForce::Float64
+    mix::Matrix{Float64}
+    unmix::Matrix{Float64}
 end
 
 
